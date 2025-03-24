@@ -1,5 +1,7 @@
 import time
 
+import jdatetime
+
 import os
 
 import openpyxl
@@ -10,12 +12,12 @@ from PyQt5.QtWidgets import (
 
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QFrame, QTableWidget, QTableWidgetItem, QHeaderView,
 
-    QVBoxLayout, QHBoxLayout, QMessageBox, QButtonGroup, QRadioButton, QScrollArea
+    QVBoxLayout, QHBoxLayout, QMessageBox, QButtonGroup, QRadioButton, QScrollArea, QSizePolicy
 )
 
 from PyQt5.QtCore import Qt, QTimer
 
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QColor, QCursor
 
 
 class MainMenuWindow(QWidget):
@@ -46,7 +48,7 @@ class MainMenuWindow(QWidget):
         line.setFrameShadow(QFrame.Sunken)
         line.setStyleSheet("color: #ccc; background-color: #ccc;")
         line.setFixedHeight(2)
-        line.setFixedWidth(200)
+        line.setFixedWidth(500)
 
         # دکمه‌ها
         btn_start = QPushButton("شروع آزمون")
@@ -101,10 +103,10 @@ class MainMenuWindow(QWidget):
 
         # اضافه به چیدمان
         layout.addSpacing(-256)  # بالا رفتن تصویر به مقدار ۵۰ پیکسل
-        layout.addWidget(image_label)
+        layout.addWidget(image_label, alignment=Qt.AlignCenter)
         layout.addSpacing(124)
-        layout.addWidget(title)
-        layout.addSpacing(64)
+        layout.addWidget(title, alignment=Qt.AlignCenter)
+        layout.addSpacing(16)
         layout.addWidget(line, alignment=Qt.AlignCenter)
         layout.addSpacing(16)
         layout.addWidget(btn_start, alignment=Qt.AlignCenter)
@@ -122,78 +124,94 @@ class MainMenuWindow(QWidget):
 
     def show_results(self):
 
-        try:
+        file_name = "results.xlsx"
 
-            import openpyxl
+        # اگر فایل اصلاً وجود نداشت
+        if not os.path.exists(file_name):
+            QMessageBox.information(
+                self, "اطلاعاتی یافت نشد", "هنوز هیچ نتیجه‌ای ثبت نشده است.")
+            return
 
-            import os
+        # باز کردن فایل
+        wb = openpyxl.load_workbook(file_name)
+        ws = wb.active
 
-            from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QVBoxLayout, QPushButton
+        # اگر فقط هدر داریم (یعنی فقط یک ردیف)
+        if ws.max_row <= 1:
+            QMessageBox.information(
+                self, "اطلاعاتی یافت نشد", "هنوز هیچ نتیجه‌ای ذخیره نشده است.")
+            return
 
-            if not os.path.exists("results.xlsx"):
+        self.results_window = QWidget()
+        self.results_window.setWindowTitle("نتایج ذخیره‌شده")
+        self.results_window.setLayoutDirection(Qt.RightToLeft)
+        self.results_window.setWindowState(Qt.WindowMaximized)
+        self.results_window.setStyleSheet("background-color: white;")
 
-                raise FileNotFoundError("فایل نتایج وجود ندارد.")
+        layout = QVBoxLayout()
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(20)
 
-            wb = openpyxl.load_workbook("results.xlsx")
+        table = QTableWidget()
+        table.setRowCount(ws.max_row - 1)
+        table.setColumnCount(ws.max_column)
+        table.verticalHeader().setVisible(False)
+        table.setHorizontalHeaderLabels([cell.value for cell in ws[1]])
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.setStyleSheet("""
+            QTableWidget {
+                font-size: 46px;
+                border: none;  /* ❌ حذف قاب کلی جدول */
+                gridline-color: #4CAF50;  /* ✅ خطوط بین سلول‌ها */
+            }
+            
+            QHeaderView::section {
+                background-color: #C8E6C9;
+                font-weight: bold;
+                font-size: 46px;
+                padding: 6px;
+                border: none;  /* ❌ حذف حاشیه اطراف تیترها */
+            }
+        """)
 
-            ws = wb.active
+        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
+            for j, val in enumerate(row):
+                item = QTableWidgetItem(str(val))
+                item.setTextAlignment(Qt.AlignCenter)
 
-            # ساخت پنجره جدید برای نمایش نتایج
+                # رنگ وضعیت قبولی/عدم قبولی
+                if ws[1][j].value == "وضعیت":
+                    if str(val).strip() == "قبولی":
+                        item.setBackground(QColor("#388E3C"))
+                        item.setForeground(Qt.white)
+                    elif str(val).strip() == "عدم قبولی":
+                        item.setBackground(QColor("#D32F2F"))
+                        item.setForeground(Qt.white)
 
-            self.results_window = QWidget()
+                table.setItem(i, j, item)
 
-            self.results_window.setWindowTitle("نتایج ذخیره‌شده")
+        layout.addWidget(table)
 
-            self.results_window.setLayoutDirection(Qt.RightToLeft)
+        # دکمه بازگشت
+        btn_back = QPushButton("بازگشت به منوی اصلی")
+        btn_back.setCursor(Qt.PointingHandCursor)
+        btn_back.setFixedSize(840, 120)
+        btn_back.setStyleSheet("""
+            QPushButton {
+                background-color: #A5D6A7;
+                font-size: 52px;
+                border-radius: 18px;
+            }
+            QPushButton:hover {
+                background-color: #81C784;
+            }
+        """)
+        btn_back.clicked.connect(self.back_to_main)
 
-            self.results_window.setWindowState(Qt.WindowMaximized)
-
-            layout = QVBoxLayout()
-
-            table = QTableWidget()
-
-            table.setRowCount(ws.max_row - 1)
-
-            table.setColumnCount(ws.max_column)
-
-            table.setHorizontalHeaderLabels([cell.value for cell in ws[1]])
-
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-            for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
-
-                for j, val in enumerate(row):
-
-                    table.setItem(i, j, QTableWidgetItem(str(val)))
-
-            layout.addWidget(table)
-
-            # دکمه بازگشت به منو
-
-            btn_back = QPushButton("بازگشت به منوی اصلی")
-
-            btn_back.setFixedWidth(200)
-
-            btn_back.setStyleSheet("font-size: 16px;")
-
-            btn_back.clicked.connect(self.back_to_main)
-
-            layout.addSpacing(20)
-
-            layout.addWidget(btn_back)
-
-            layout.setAlignment(btn_back, Qt.AlignCenter)
-
-            self.results_window.setLayout(layout)
-
-            self.results_window.show()
-            self.close()
-
-        except Exception as e:
-
-            QMessageBox.warning(
-
-                self, "خطا", f"خواندن فایل نتایج با خطا مواجه شد:\n{str(e)}")
+        layout.addWidget(btn_back, alignment=Qt.AlignCenter)
+        self.results_window.setLayout(layout)
+        self.results_window.show()
+        self.close()
 
     def back_to_main(self):
 
@@ -205,90 +223,101 @@ class MainMenuWindow(QWidget):
 
 
 class LoginWindow(QWidget):
-
     def __init__(self):
-
         super().__init__()
-
-        self.setWindowTitle("ورود به سامانه آزمون")
-
-        self.setGeometry(100, 100, 600, 400)
+        self.setWindowTitle("ورود به آزمون")
+        self.setLayoutDirection(Qt.RightToLeft)
+        self.setWindowState(Qt.WindowMaximized)
+        self.setStyleSheet("background-color: white;")
         self.init_ui()
 
     def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignCenter)
+
+        # تصویر
+        image_label = QLabel()
+        image_label.setPixmap(QPixmap("./Images/LoginPage.png").scaledToHeight(
+            1000, Qt.SmoothTransformation))
+        image_label.setAlignment(Qt.AlignCenter)
 
         # عنوان
-
-        title_label = QLabel("سامانه آزمون")
-
+        title_label = QLabel("آزمون آزمایشی")
+        title_label.setStyleSheet(
+            "font-size: 92px; font-weight: bold; color: #555;")
         title_label.setAlignment(Qt.AlignCenter)
 
-        title_label.setStyleSheet("font-size: 28px; font-weight: bold;")
+        # خط زیر عنوان
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        line.setStyleSheet("color: #ccc; background-color: #ccc;")
+        line.setFixedHeight(2)
+        line.setFixedWidth(500)
 
-        # فیلد نام کاربری
-
-        name_label = QLabel("نام کاربری:")
-
+        # فیلد نام کاربری (مثل دکمه طراحی شده)
         self.name_input = QLineEdit()
+        # لیبل بالای فیلد نام کاربری
+        name_label = QLabel("نام کاربری خود را وارد کنید:")
+        name_label.setAlignment(Qt.AlignCenter)
+        name_label.setStyleSheet(
+            "font-size: 52px; color: #888; margin-bottom: 8px;")
 
-        self.name_input.setPlaceholderText("نام خود را وارد کنید")
+        self.name_input.setFixedSize(840, 120)
+        self.name_input.setAlignment(Qt.AlignCenter)
+        self.name_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #C8E6C9;
+                border: none;
+                border-radius: 18px;
+                font-size: 52px;
+                padding: 6px;
+            }
+            
+        """)
 
         # دکمه شروع آزمون
-
         start_button = QPushButton("شروع آزمون")
-
+        start_button.setCursor(Qt.PointingHandCursor)
+        start_button.setFixedSize(840, 120)
+        start_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-size: 52px;
+                border-radius: 18px;
+            }
+            QPushButton:hover {
+                background-color: #43A047;
+            }
+        """)
         start_button.clicked.connect(self.start_exam)
 
-        # چیدمان راست‌چین
+        # افزودن به چیدمان
+        layout.addSpacing(-256)
+        layout.addWidget(image_label, alignment=Qt.AlignCenter)
+        layout.addSpacing(64)
+        layout.addWidget(title_label, alignment=Qt.AlignCenter)
+        layout.addSpacing(16)
+        layout.addWidget(line, alignment=Qt.AlignCenter)
+        layout.addSpacing(64)
+        layout.addWidget(name_label, alignment=Qt.AlignCenter)
+        layout.addWidget(self.name_input, alignment=Qt.AlignCenter)
+        layout.addWidget(start_button, alignment=Qt.AlignCenter)
 
-        name_layout = QHBoxLayout()
-
-        name_layout.addWidget(self.name_input)
-
-        name_layout.addWidget(name_label)
-
-        # چیدمان کلی
-
-        main_layout = QVBoxLayout()
-
-        main_layout.addWidget(title_label)
-
-        main_layout.addSpacing(30)
-
-        main_layout.addLayout(name_layout)
-
-        main_layout.addSpacing(20)
-
-        main_layout.addWidget(start_button)
-
-        main_layout.setAlignment(Qt.AlignTop | Qt.AlignRight)
-
-        main_layout.setContentsMargins(50, 50, 50, 50)
-
-        self.setLayout(main_layout)
-
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
-
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-
-        self.showMaximized()  # نمایش تمام‌صفحه با کنترل پنجره
+        self.setLayout(layout)
 
     def start_exam(self):
-
         username = self.name_input.text().strip()
-
         if not username:
-
             QMessageBox.warning(self, "خطا", "لطفاً نام کاربری را وارد کنید.")
             return
 
         print(f"ورود با نام کاربری: {username}")
-
+        # اتصال به صفحه بعدی آزمون
         self.exam_window = ExamWindow(username)
-
         self.exam_window.show()
-
-        self.close()  # بستن صفحه ورود (اختیاری)
+        self.close()
 
 
 # ########################################################################
@@ -299,139 +328,201 @@ class LoginWindow(QWidget):
 
 
 class QuestionWidget(QWidget):
-
     def __init__(self, question_data, parent=None):
-
         super().__init__(parent)
-
         self.question_data = question_data
-
         self.correct_index = question_data["correct"]
-
         self.explanation = question_data["explanation"]
+        self.selected_id = -1
         self.init_ui()
 
     def init_ui(self):
-
         self.setLayoutDirection(Qt.RightToLeft)
-
         layout = QVBoxLayout()
-
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignTop)
 
-        # سوال
+        # ✅ تصویر سوال (بالای همه)
+        image_label = QLabel()
+        image_label.setPixmap(
+            QPixmap("./Images/question.png").scaledToHeight(1000, Qt.SmoothTransformation))
+        image_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(image_label)
 
+        # ✅ سوال
         self.question_label = QLabel(self.question_data["question"])
-
         self.question_label.setStyleSheet(
-
-            "font-size: 20px; font-weight: bold;")
+            "font-size: 64px; font-weight: bold; color: #444;")
+        self.question_label.setAlignment(Qt.AlignCenter)
 
         layout.addWidget(self.question_label)
 
-        # گزینه‌ها
-
+        # ✅ گزینه‌ها
         self.options_group = QButtonGroup(self)
-
         self.option_buttons = []
 
         for i, text in enumerate(self.question_data["options"]):
-
             btn = QRadioButton(text)
-
-            btn.setStyleSheet("font-size: 16px; padding: 4px;")
-
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+            btn.setStyleSheet(self.default_option_style())
+            btn.setCursor(QCursor(Qt.PointingHandCursor))
+            btn.setStyleSheet(self.default_option_style())
+            btn.setMinimumHeight(100)
+            btn.toggled.connect(self.update_option_styles)
             self.options_group.addButton(btn, i)
-
             self.option_buttons.append(btn)
+            if i == 0:
+                layout.addSpacing(64)
 
             layout.addWidget(btn)
 
-        # دکمه ثبت پاسخ
-
-        self.submit_button = QPushButton("ثبت پاسخ")
-
+        # ✅ دکمه‌ها
+        self.submit_button = QPushButton("ثبت سوال")
+        self.submit_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.submit_button.setStyleSheet(self.primary_button_style())
+        self.submit_button.setMinimumHeight(100)
         self.submit_button.clicked.connect(self.check_answer)
 
-        layout.addWidget(self.submit_button)
-
-        # نمایش توضیح
-
-        self.explanation_label = QLabel("")
-
-        self.explanation_label.setWordWrap(True)
-
-        self.explanation_label.hide()
-
-        layout.addWidget(self.explanation_label)
-
-        # دکمه سوال بعدی
-
-        self.next_button = QPushButton("سؤال بعدی")
-
+        self.next_button = QPushButton("سوال بعدی")
+        self.next_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.next_button.setStyleSheet(self.primary_button_style())
+        self.next_button.setMinimumHeight(100)
         self.next_button.setEnabled(False)
 
-        layout.addWidget(self.next_button)
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(29)  # فاصله بین دکمه‌ها
+
+        self.submit_button.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.next_button.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        button_layout.addWidget(self.submit_button)
+        button_layout.addWidget(self.next_button)
+
+        layout.addSpacing(24)
+        layout.addLayout(button_layout)
+
+        # ✅ توضیحات
+        self.explanation_label = QLabel("")
+        self.explanation_label.setWordWrap(True)
+        self.explanation_label.setStyleSheet(
+            "font-size: 52px; color: #444; margin-top: 24px;")
+        self.explanation_label.setAlignment(Qt.AlignCenter)
+        self.explanation_label.hide()
+        layout.addWidget(self.explanation_label)
 
         self.setLayout(layout)
 
+    def default_option_style(self):
+        return """
+            QRadioButton {
+                font-size: 46px;
+                padding: 20px;
+                background-color: #E0E0E0;
+                border-radius: 16px;
+                font-weight: normal;
+                text-align: right;
+            }
+            QRadioButton::indicator {
+            width: 24px;
+            height: 24px;
+            background: transparent;
+            }
+        """
+
+    def selected_option_style(self):
+        return """
+            QRadioButton {
+                font-size: 46px;
+                padding: 20px;
+                background-color: #A5D6A7;
+                border-radius: 16px;
+                font-weight: bold;
+            }
+        """
+
+    def correct_option_style(self):
+        return """
+            QRadioButton {
+                background-color: #388E3C;
+                color: white;
+                font-size: 46px;
+                padding: 20px;
+                border-radius: 16px;
+                font-weight: bold;
+            }
+        """
+
+    def wrong_option_style(self):
+        return """
+            QRadioButton {
+                background-color: #D32F2F;
+                color: white;
+                font-size: 46px;
+                padding: 20px;
+                border-radius: 16px;
+                font-weight: bold;
+            }
+        """
+
+    def primary_button_style(self):
+        return """
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-size: 42px;
+                padding: 20px;
+                font-weight: bold;
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                background-color: #43A047;
+            }
+            QPushButton:disabled {
+                background-color: #A5D6A7;
+                color: white;
+            }
+        """
+
+    def update_option_styles(self):
+        for i, btn in enumerate(self.option_buttons):
+            if btn.isChecked():
+                btn.setStyleSheet(self.selected_option_style())
+                self.selected_id = i
+            else:
+                btn.setStyleSheet(self.default_option_style())
+
     def check_answer(self):
-
-        selected_id = self.options_group.checkedId()
-
-        if selected_id == -1:
-
+        if self.selected_id == -1:
             QMessageBox.warning(self, "توجه", "لطفاً یک گزینه را انتخاب کنید.")
             return
 
-        # بررسی درست یا غلط بودن
-
         for i, btn in enumerate(self.option_buttons):
-
             if i == self.correct_index:
-
-                btn.setStyleSheet("color: green; font-weight: bold;")
-
-            elif i == selected_id:
-
-                btn.setStyleSheet("color: red; font-weight: bold;")
-
+                btn.setStyleSheet(self.correct_option_style())
+            elif i == self.selected_id:
+                btn.setStyleSheet(self.wrong_option_style())
             else:
-
-                btn.setStyleSheet("color: gray;")
-
-        self.explanation_label.setText(f"📝 توضیح: {self.explanation}"
-                                       )
-        self.explanation_label.show()
-
-        # غیر فعال کردن گزینه‌ها
-
-        for btn in self.option_buttons:
-
+                btn.setStyleSheet(self.default_option_style())
             btn.setDisabled(True)
 
         self.submit_button.setEnabled(False)
-
         self.next_button.setEnabled(True)
+        self.explanation_label.setText(f"📝 توضیح: {self.explanation}")
+        self.explanation_label.show()
 
     def reset(self):
-        """برای شروع سوال جدید"""
-
+        self.selected_id = -1
         self.explanation_label.hide()
-
         self.submit_button.setEnabled(True)
-
         self.next_button.setEnabled(False)
-
         self.options_group.setExclusive(False)
 
         for btn in self.option_buttons:
-
             btn.setChecked(False)
-
-            btn.setDisabled(False)
-
-            btn.setStyleSheet("color: black; font-size: 16px;")
+            btn.setEnabled(True)
+            btn.setStyleSheet(self.default_option_style())
 
         self.options_group.setExclusive(True)
 
@@ -969,29 +1060,42 @@ class ResultWindow(QWidget):
 
         self.setLayout(layout)
 
-    def save_to_excel(self, username, correct, total, percent, status, duration_sec):
+    import jdatetime
 
+    def save_to_excel(self, username, correct, total, percent, status, duration_sec):
         file_name = "results.xlsx"
 
         if os.path.exists(file_name):
-
             wb = openpyxl.load_workbook(file_name)
-
             ws = wb.active
-
         else:
-
             wb = openpyxl.Workbook()
-
             ws = wb.active
+            ws.append([
+                "ردیف", "نام کاربری", "تعداد درست", "کل سوالات",
+                "درصد", "وضعیت", "زمان آزمون", "تاریخ و ساعت آزمون"
+            ])
 
-            ws.append(["نام کاربری", "تعداد درست", "کل سوالات",
+        row_number = ws.max_row
 
-                      "درصد", "وضعیت", "مدت زمان (ثانیه)"])
+        minutes = int(duration_sec // 60)
+        seconds = int(duration_sec % 60)
+        time_str = f"{minutes:02d}:{seconds:02d}"
 
-        ws.append([username, correct, total,
+        # تاریخ شمسی
+        now = jdatetime.datetime.now()
+        datetime_str = now.strftime("%Y/%m/%d - %H:%M")
 
-                  f"{percent:.1f}%", status, int(duration_sec)])
+        ws.append([
+            row_number,
+            username,
+            correct,
+            total,
+            f"{percent:.1f}%",
+            status,
+            time_str,
+            datetime_str
+        ])
 
         wb.save(file_name)
 
@@ -1117,7 +1221,7 @@ class ReviewWindow(QWidget):
 
     def go_to_main_menu(self):
         self.menu = MainMenuWindow()
-        self.menu.shnM()
+        self.menu.show()
         self.close()
 
 
